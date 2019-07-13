@@ -8,7 +8,6 @@ import pandas as pd
 
 # Data viuslisation
 import seaborn as sns
-%matplotlib inline
 from matplotlib import pyplot as plt
 from matplotlib import style
 
@@ -40,3 +39,21 @@ plt.show()
 matrix = data.corr()
 f, ax = plt.subplots(figsize=(9, 6))
 sns.heatmap(matrix, vmax=0.8, square=True, cmap='BuPu')
+
+## Model ##
+# Independent and dependent variables
+
+y = data['CO (ppm)']
+X = data.drop('CO (ppm)', axis=1)
+
+# Test train split
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.25, random_state=0)
+
+# Applying PCA
+from sklearn.decomposition import KernelPCA
+pca = KernelPCA(n_components=19, kernel='rbf')
+X_test = pca.fit_transform(X_test)
+X_test = pca.fit_transform(X_test)
