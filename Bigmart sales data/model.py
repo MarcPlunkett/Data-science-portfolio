@@ -27,7 +27,7 @@
 
 #Data processing
 import pandas as pd
-import numpy as numpy
+import numpy as np
 
 #Graphics
 import seaborn as sns
@@ -35,8 +35,8 @@ import matplotlib.pyplot as pyplot
 
 # Import data sets
 
-train = pd.read_csv('/Users/marc/Data-science-portfolio/Bigmart sales data/dataset/Train_UWu5bXk.csv')
-test = pd.read_csv('/Users/marc/Data-science-portfolio/Bigmart sales data/dataset/Test_u94Q5KV.csv')
+train = pd.read_csv('/Users/MarcPlunkett/Data-science-portfolio/Bigmart sales data/dataset/Train_UWu5bXk.csv')
+test = pd.read_csv('/Users/MarcPlunkett/Data-science-portfolio/Bigmart sales data/dataset/Test_u94Q5KV.csv')
 
 train['source']='train'
 test['source']='test'
@@ -91,7 +91,8 @@ data['Item_Weight'].isnull().sum()
 
 #Do the same with outlet size and the mode
 from scipy.stats import mode
-outlet_size_mode = data.pivot_table(values='Outlet_Size', columns='Outlet_Type', aggfunc=(lambda x: mode(x).mode[0])) #Calculate the mode for each store type
+data['Outlet_Size']=data['Outlet_Size'].astype(str)
+outlet_size_mode = data.pivot_table(values='Outlet_Size', columns='Outlet_Type', aggfunc=(lambda x:mode(x).mode[0]) )
 miss_bool = data['Outlet_Size'].isnull() #Get index of missing weights
 data.loc[miss_bool,'Outlet_Size'] = data.loc[miss_bool,'Outlet_Type'].apply(lambda x: outlet_size_mode[x])
 data['Outlet_Size'].isnull().sum()
@@ -154,4 +155,128 @@ test = data.loc[data['source']=='test']
 train.drop(['source'], axis=1, inplace=True)
 test.drop(['source', 'Item_Outlet_Sales'], axis=1, inplace=True)
 
+train.to_csv("train_modified.csv",index=False)
+test.to_csv("test_modified.csv",index=False)
 # Model Building
+
+from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
+from sklearn.linear_model import Lasso
+from sklearn.linear_model import ElasticNet
+from sklearn.ensemble import BaggingRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import ExtraTreesRegressor
+
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.svm import SVR
+from sklearn import model_selection
+
+
+num_instances = len(train)
+
+models = []
+models.append(('LiR', LinearRegression()))
+models.append(('Ridge', Ridge()))
+models.append(('Lasso', Lasso()))
+models.append(('ElasticNet', ElasticNet()))
+models.append(('Bag_Re', BaggingRegressor()))
+models.append(('RandomForest', RandomForestRegressor()))
+models.append(('ExtraTreesRegressor', ExtraTreesRegressor()))
+models.append(('KNN', KNeighborsRegressor()))
+models.append(('CART', DecisionTreeRegressor()))
+models.append(('SVM', SVR()))
+
+## Model results and comparison for heating load
+
+results = []
+names = []
+scoring = []
+
+X = data.drop('Item_Outlet_Sales', 1)
+X = X.drop('source', 1)
+
+X.dtypes
+Y = data['Item_Outlet_Sales']
+from sklearn import cross_validation, metrics
+
+target='Item_Outlet_Sales'
+ID = ['Item_Identifier','Outlet_Identifier']
+
+predictors_set = [x for x in train.columns if x not in [target]+ID]
+
+def model_fit(alg, dtrain, dtest, predictors, target, identifiers, filename):
+    
+    # Fit algorithm
+    alg.fit(dtrain[predictors], dtrain[target])
+
+    #Predict training set
+
+    dtrain_predictions = alg.predict(dtrain[predictors])
+
+    #Rank algorithm
+    cv_score= cross_validation.cross_val_score(alg, dtrain[predictors], dtrain[target], cv=20, scoring='mean_squared_error')
+    cv_score = np.sqrt(np.abs(cv_score))
+
+    #Print report
+    print('Model Report')
+    print("RMSE : %.4g" % np.sqrt(metrics.mean_squared_error(dtrain[target].values, dtrain_predictions)))
+    print("CV Score : Mean - %.4g | Std - %.4g | Min - %.4g | Max - %.4g" % (np.mean(cv_score),np.std(cv_score),np.min(cv_score),np.max(cv_score)))
+    dtest[target] = alg.predict(dtest[predictors])
+
+    identifiers.append(target)
+
+    output= pd.DataFrame({x: dtest[x] for x in identifiers})
+    output.to_csv(filename, index=False)
+
+# Linear Regression
+alg1 = LinearRegression(normalize=True)
+model_fit(alg1, train, test, predictors_set, target, ID, 'linreg.csv')
+coef1 = pd.Series(alg1.coef_, predictors_set).sort_values()
+coef1.plot(kind='bar', title='Model Coefficients')
+
+# Ridge regression
+alg2 = Ridge(alpha=0.05, normalize=True)
+model_fit(alg2, train, test, predictors_set, target, ID, 'ridge.csv')
+coef2 = pd.Series(alg2.coef_, predictors_set).sort_values()
+coef2.plot(kind='bar', title='Model Coefficients')
+
+# Decision tree
+alg3=DecisionTreeRegressor(max_depth=15, min_samples_leaf=100)
+model_fit(alg3, train, test, predictors_set, target, ID, 'ridge.csv')
+coef3 = pd.Series(alg3.feature_importances_, predictors_set).sort_values()
+coef3.plot(kind='bar', title='Model Coefficients')
+
+# RSME is low which implies overfitting, try again with only the top 4 variables
+predictors_set = ['Item_MRP','Outlet_Type','years_open','Item_Visibility']
+alg4=DecisionTreeRegressor(max_depth=8, min_samples_leaf=150)
+model_fit(alg4, train, test, predictors_set, target, ID, 'ridge.csv')
+coef4 = pd.Series(alg4.feature_importances_, predictors_set).sort_values()
+coef4.plot(kind='bar', title='Model Coefficients')
+
+# Random forect
+# Increasing the number of trees makes the model robust but is computationally expensive.
+predictors_set = [x for x in train.columns if x not in [target]+ID]
+alg5=RandomForestRegressor(n_estimators=200, max_depth=5, min_samples_leaf=100, n_jobs=5)
+model_fit(alg5, train, test, predictors_set, target, ID, 'ridge.csv')
+coef5 = pd.Series(alg5.feature_importances_, predictors_set).sort_values()
+coef5.plot(kind='bar', title='Model Coefficients')
+
+# for name, model in models:
+    
+#     model.fit(X, Y)
+#     y_pred = model.predict(X)
+
+#     kfold =  model_selection.KFold(n_splits=num_instances)
+#     cv_results = model_selection.cross_val_score(model, X, Y1, cv=10)
+#     results.append(cv_results)
+#     names.append(name)
+#     msg = "%s: %f(%f)" %(name, cv_results.mean(), cv_results.std())
+#     print(msg)
+
+# fig = plt.figure(figsize=(20,10))
+# ax= fig.add_subplot(111)
+# plt.boxplot(results)
+# ax.set_xticklabels(names)
+# ax.set_facecolor('xkcd:salmon')
+# plt.show()
