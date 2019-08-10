@@ -35,8 +35,8 @@ import matplotlib.pyplot as pyplot
 
 # Import data sets
 
-train = pd.read_csv('/Users/MarcPlunkett/Data-science-portfolio/Bigmart sales data/dataset/Train_UWu5bXk.csv')
-test = pd.read_csv('/Users/MarcPlunkett/Data-science-portfolio/Bigmart sales data/dataset/Test_u94Q5KV.csv')
+train = pd.read_csv('/Users/marc/Data-science-portfolio/Bigmart sales data/dataset/Train_UWu5bXk.csv')
+test = pd.read_csv('/Users/marc/Data-science-portfolio/Bigmart sales data/dataset/Test_u94Q5KV.csv')
 
 train['source']='train'
 test['source']='test'
